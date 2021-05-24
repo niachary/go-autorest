@@ -1,4 +1,4 @@
-module github.com/Azure/go-autorest/autorest
+module github.com/niachary/Azure/go-autorest/autorest
 
 go 1.12
 
