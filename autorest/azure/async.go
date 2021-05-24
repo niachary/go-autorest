@@ -27,6 +27,7 @@ import (
 
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/tracing"
+	"k8s.io/klog/klogr"
 )
 
 const (
@@ -150,6 +151,8 @@ func (f Future) GetPollingDelay() (time.Duration, bool) {
 // If PollingDuration is greater than zero the value will be used as the context's timeout.
 // If PollingDuration is zero then no default deadline will be used.
 func (f *Future) WaitForCompletionRef(ctx context.Context, client autorest.Client) (err error) {
+	log := klogr.New()
+	log.Info(fmt.Sprintf("In method Wait for completion"))
 	ctx = tracing.StartSpan(ctx, "github.com/Azure/go-autorest/autorest/azure/async.WaitForCompletionRef")
 	defer func() {
 		sc := -1
@@ -169,6 +172,7 @@ func (f *Future) WaitForCompletionRef(ctx context.Context, client autorest.Clien
 	}
 	// if the initial response has a Retry-After, sleep for the specified amount of time before starting to poll
 	if delay, ok := f.GetPollingDelay(); ok {
+		log.Info(fmt.Sprintf("Delay is: %d",delay))
 		if delayElapsed := autorest.DelayForBackoff(delay, 0, cancelCtx.Done()); !delayElapsed {
 			err = cancelCtx.Err()
 			return
@@ -177,6 +181,7 @@ func (f *Future) WaitForCompletionRef(ctx context.Context, client autorest.Clien
 	done, err := f.DoneWithContext(ctx, client)
 	for attempts := 0; !done; done, err = f.DoneWithContext(ctx, client) {
 		if attempts >= client.RetryAttempts {
+			log.Info(fmt.Sprintf("attempts %d has exceeded retry attempts %d",attempts,client.RetryAttempts))
 			return autorest.NewErrorWithError(err, "Future", "WaitForCompletion", f.pt.latestResponse(), "the number of retries has been exceeded")
 		}
 		// we want delayAttempt to be zero in the non-error case so
@@ -188,12 +193,14 @@ func (f *Future) WaitForCompletionRef(ctx context.Context, client autorest.Clien
 			var ok bool
 			delay, ok = f.GetPollingDelay()
 			if !ok {
+				log.Info(fmt.Sprintf("setting delay as clients polling delay %d",client.PollingDelay))
 				delay = client.PollingDelay
 			}
 		} else {
 			// there was an error polling for status so perform exponential
 			// back-off based on the number of attempts using the client's retry
 			// duration.  update attempts after delayAttempt to avoid off-by-one.
+			log.Info(fmt.Sprintf("exponential backoff"))
 			delayAttempt = attempts
 			delay = client.RetryDuration
 			attempts++
@@ -201,9 +208,11 @@ func (f *Future) WaitForCompletionRef(ctx context.Context, client autorest.Clien
 		// wait until the delay elapses or the context is cancelled
 		delayElapsed := autorest.DelayForBackoff(delay, delayAttempt, cancelCtx.Done())
 		if !delayElapsed {
+			log.Info(fmt.Sprintf("returning Error"))
 			return autorest.NewErrorWithError(cancelCtx.Err(), "Future", "WaitForCompletion", f.pt.latestResponse(), "context has been cancelled")
 		}
 	}
+	log.Info("returning from WaitForCompletionRef")
 	return
 }
 

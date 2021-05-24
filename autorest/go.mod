@@ -9,4 +9,5 @@ require (
 	github.com/Azure/go-autorest/logger v0.2.0
 	github.com/Azure/go-autorest/tracing v0.6.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+	k8s.io/klog v1.0.0
 )
